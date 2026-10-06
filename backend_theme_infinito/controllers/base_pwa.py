@@ -22,18 +22,21 @@
 import json
 from odoo import http
 from odoo.http import request
-from odoo.modules.module import get_module_resource
+
 
 class BasePwa(http.Controller):
     def pwa_data(self):
-        src = get_module_resource('backend_theme_infinito', 'static', 'src', 'img', 'menu.png')
+        # pwa_enable = request.env[
+        #     "ir.config_parameter"].sudo().get_param(
+        #     "base_pwa.pwa_enable")
+        # if pwa_enable:
         return {
             'short_name': 'Odoo',
             'name': 'Odoo-infinito',
             'description': 'PWA provided by backend theme infinito',
             'icons': [
                 {
-                    'src': f'{src}',
+                    'src': '/backend_theme_infinito/static/src/img/menu.png',
                     'type': 'image/png',
                     'sizes': '144x144',
                     'purpose': 'any maskable'

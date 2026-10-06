@@ -95,4 +95,5 @@ class IrHttp(models.AbstractModel):
                 list_bookmark.append(bkm)
             res['infinitoBookmarks'] = menu_bookmark.action_id.ids
             res['infinitoMenuBookmarks'] = list_bookmark
+
         return res

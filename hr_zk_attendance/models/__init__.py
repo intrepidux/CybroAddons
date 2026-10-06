@@ -20,6 +20,8 @@
 #
 ###################################################################################
 from . import zk_machine
+from . import attendance_pairing_sync
 from . import machine_analysis
 from . import zklib
-
+from . import resource_extension
+from . import hr_attendance_extension

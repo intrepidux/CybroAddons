@@ -17,17 +17,13 @@
 #    If not, see <http://www.gnu.org/licenses/>.
 #
 ##############################################################################
-from odoo import api, models, fields
-from odoo.http import request
+from odoo import models, fields
+
 
 class ResUsersInherit(models.Model):
     _inherit = 'res.users'
 
     allowed_ips = fields.One2many('allowed.ips', 'users_ip', string='IP')
-
-    def action_logout(self):
-        session = self.env['ir.http'].session_info()
-
 
 
 class AllowedIPs(models.Model):
@@ -35,4 +31,3 @@ class AllowedIPs(models.Model):
 
     users_ip = fields.Many2one('res.users', string='IP')
     ip_address = fields.Char(string='Allowed IP')
-

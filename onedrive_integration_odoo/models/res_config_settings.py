@@ -20,14 +20,12 @@
 #
 ###############################################################################
 import json
-import logging
 import requests
 from werkzeug import urls
 from odoo import fields, models, _
 from odoo.exceptions import UserError
 from odoo.http import request
 
-_logger = logging.getLogger(__name__)
 
 class ResConfigSettings(models.TransientModel):
     _inherit = 'res.config.settings'
@@ -44,10 +42,6 @@ class ResConfigSettings(models.TransientModel):
     onedrive_access_token = fields.Char(
         string='Onedrive Access Token',
         help='Access token generated from onedrive')
-    onedrive_tenant_id = fields.Char(
-        string="Onedrive Tenant Id",
-        config_parameter='onedrive_integration_odoo.tenant_id',
-        help="Director (tenant) id for accessing OneDrive API")
     onedrive_refresh_token = fields.Char(
         string='Onedrive Refresh Token',
         help='Refresh token generated from onedrive')
@@ -76,16 +70,13 @@ class ResConfigSettings(models.TransientModel):
             'redirect_uri': request.env['ir.config_parameter'].get_param(
                 'web.base.url') + '/onedrive/authentication'
         }
-        tenant_id = self.env['ir.config_parameter'].get_param(
-            'onedrive_integration_odoo.tenant_id', '')
         res = requests.post(
-            f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token",
+            "https://login.microsoftonline.com/common/oauth2/v2.0/token",
             data=data,
             headers={"content-type": "application/x-www-form-urlencoded"}
         )
         response = res.content and res.json() or {}
         if 'error' in response:
-            _logger.warning(response)
             raise UserError(_("Error '%s': Please check the credentials.",
                               response['error']))
         else:

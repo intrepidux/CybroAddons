@@ -16,8 +16,7 @@ class BookedOrdersButton extends PosComponent {
             method: 'all_orders',
         }).then(function(result) {
             self.showScreen('BookedOrdersScreen', {
-                data: result,
-                new_order: false,
+                data: result
             });
         })
     }

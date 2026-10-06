@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_zk_report_daily_attendance_tree_kiosk" model="ir.ui.view">
+        <field name="name">zk.report.daily.attendance.tree.kiosk</field>
+        <field name="model">zk.report.daily.attendance</field>
+        <field name="inherit_id" ref="hr_zk_attendance.view_zk_report_daily_attendance_tree"/>
+        <field name="arch" type="xml">
+            <field name="punch_type" position="before">
+                <field name="zk_machine_id" optional="show"/>
+            </field>
+            <field name="address_id" position="attributes">
+                <attribute name="optional">show</attribute>
+            </field>
+            <field name="address_id" position="after">
+                <field name="geofence_id" optional="hide"/>
+                <field name="geofence_match" optional="show"/>
+                <field name="latitude" optional="show"/>
+                <field name="longitude" optional="show"/>
+                <field name="geo_accuracy_m" optional="hide"/>
+            </field>
+        </field>
+    </record>
+</odoo>

@@ -26,7 +26,6 @@ from odoo import http
 from odoo.http import request
 from odoo.addons.backend_theme_infinito.controllers.main import ThemeStudio
 from odoo.addons.backend_theme_infinito.controllers.main import minify_css
-from odoo.modules.module import get_module_resource
 
 
 class ThemeStudioPlus(ThemeStudio):
@@ -36,7 +35,9 @@ class ThemeStudioPlus(ThemeStudio):
     def save_styles_plus(self, new_style):
         """Create Dynamic Styles css file for chat box layout"""
         changed_styles = json.loads(new_style)
-        file_path = get_module_resource('backend_theme_infinito_plus', 'static', 'src', 'css', 'chatter.css')
+        working_dir = os.path.dirname(os.path.realpath(__file__))
+        working_dir = working_dir.replace('/controllers', '')
+        file_path = working_dir + '/static/src/css/chatter.css'
         style_file = open(file_path, 'a')
         style_file.truncate(0)
         if os.stat(file_path).st_size == 0:
@@ -55,7 +56,9 @@ class ThemeStudioPlus(ThemeStudio):
         """ create the Dynamic css file for animation"""
         animated = json.loads(style)
         saved_style = animated[0]
-        file_path = get_module_resource('backend_theme_infinito_plus', 'static', 'src', 'scss', 'animation.scss')
+        working_dir = os.path.dirname(os.path.realpath(__file__))
+        file_path = working_dir.replace('/controllers',
+                                        '/static/src/scss/animation.scss')
         read_file = open(file_path, 'r')
         css = read_file.read()
         write_file = open(file_path, 'w')
@@ -102,10 +105,13 @@ class ThemeStudioPlus(ThemeStudio):
     @http.route(['/theme_studio_plus/reset_to_default_style'], type="json")
     def reset_to_default_style(self):
         """rest to default styles"""
-        style_file_path = get_module_resource('backend_theme_infinito_plus', 'static', 'src', 'css', 'font.css')
-        animation_file_path = get_module_resource('backend_theme_infinito_plus', 'static', 'src', 'scss',
-                                                  'animation.scss')
-        chat_file_path = get_module_resource('backend_theme_infinito_plus', 'static', 'src', 'css', 'chatter.css')
+        working_dir = os.path.dirname(os.path.realpath(__file__))
+        style_file_path = working_dir.replace('controllers',
+                                              'static/src/css/font.css')
+        animation_file_path = working_dir.replace('controllers',
+                                                  'static/src/scss/animation.scss')
+        chat_file_path = working_dir.replace('controllers',
+                                             'static/src/css/chatter.css')
         style_file = open(style_file_path, 'w')
         style_file.write('')
         animation_read_file = open(animation_file_path, 'r')

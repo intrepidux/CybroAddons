@@ -21,7 +21,7 @@
 ###############################################################################
 {
     'name': 'Automatic Invoice And Post',
-    'version': "15.0.1.0.1",
+    'version': "15.0.1.0.0",
     'category': 'Sales,Warehouse,Accounting',
     'summary': """ Auto Invoice from Delivery validate.""",
     'description': """This module generates and post invoice

@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_hr_attendance_geofence_user,hr.attendance.geofence.user,model_hr_attendance_geofence,hr_attendance.group_hr_attendance_user,1,1,1,1
+access_hr_attendance_geofence_kiosk,hr.attendance.geofence.kiosk,model_hr_attendance_geofence,hr_attendance.group_hr_attendance_kiosk,1,0,0,0
+access_zk_machine_kiosk_read,zk.machine.kiosk.read,hr_zk_attendance.model_zk_machine,hr_attendance.group_hr_attendance_kiosk,1,0,0,0
+access_zk_machine_attendance_kiosk,zk.machine.attendance.kiosk,hr_zk_attendance.model_zk_machine_attendance,hr_attendance.group_hr_attendance_kiosk,1,0,1,0

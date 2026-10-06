@@ -44,14 +44,16 @@ class ZkMachine(models.Model):
                                    ('2', 'Break Out'),
                                    ('3', 'Break In'),
                                    ('4', 'Overtime In'),
-                                   ('5', 'Overtime Out')],
+                                   ('5', 'Overtime Out'),
+                                   ('255', 'Unknown')],
                                   string='Punching Type')
 
     attendance_type = fields.Selection([('1', 'Finger'),
                                         ('15', 'Face'),
                                         ('2','Type_2'),
                                         ('3','Password'),
-                                        ('4','Card')], string='Category')
+                                        ('4','Card'),
+                                        ('16','Unknown')], string='Category')
     punching_time = fields.Datetime(string='Punching Time')
     address_id = fields.Many2one('res.partner', string='Working Address')
 
@@ -68,14 +70,16 @@ class ReportZkDevice(models.Model):
                                         ('15', 'Face'),
                                         ('2','Type_2'),
                                         ('3','Password'),
-                                        ('4','Card')],
+                                        ('4','Card'),
+                                        ('16','Unknown')],
                                        string='Category')
     punch_type = fields.Selection([('0', 'Check In'),
                                    ('1', 'Check Out'),
                                    ('2', 'Break Out'),
                                    ('3', 'Break In'),
                                    ('4', 'Overtime In'),
-                                   ('5', 'Overtime Out')], string='Punching Type')
+                                   ('5', 'Overtime Out'),
+                                   ('255', 'Unknown')], string='Punching Type')
     punching_time = fields.Datetime(string='Punching Time')
 
     def init(self):

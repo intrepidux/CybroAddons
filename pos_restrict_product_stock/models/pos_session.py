@@ -34,5 +34,4 @@ class PosSession(models.Model):
         result = super()._loader_params_product_product()
         result['search_params']['fields'].append('qty_available')
         result['search_params']['fields'].append('virtual_available')
-        result['search_params']['fields'].append('detailed_type')
         return result

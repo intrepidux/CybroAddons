@@ -23,7 +23,7 @@
 
 {
     'name': 'Mass Mailing With SendGrid',
-    'version': '15.0.1.1.0',
+    'version': '15.0.1.0.0',
     'summary': 'Mass Mailing using SendGrid API',
     'description': 'Mass Mailing using SendGrid API',
     'category': 'Marketing',
@@ -39,13 +39,11 @@
         'event'
     ],
     'data': [
-            'data/resend_error_mails.xml',
             'security/ir.model.access.csv',
-            'views/email_api_view.xml',
-            'views/mailing_mailing_views.xml',
-            'views/res_config_settings_views.xml',
-            'views/sendgrid_email_template_views.xml',
-            'views/menuitems.xml'
+            'views/view.xml',
+            'views/mail_view.xml',
+            'views/ir_config_view.xml',
+            'views/res_config_view.xml'
         ],
     'license': 'AGPL-3',
     'images': ['static/description/banner.png'],

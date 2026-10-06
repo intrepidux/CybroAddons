@@ -29,7 +29,7 @@ class SaleOrder(models.Model):
     def action_confirm(self):
         """ Create manufacturing order of components in selected BOM """
         for rec in self.order_line:
-            if rec.bom_id and rec.bom_id.type != 'phantom' and rec.bom_id.type != 'subcontract':
+            if rec.bom_id:
                 mo = self.env["mrp.production"].create(
                     {
                         "product_id": rec.product_id.id,

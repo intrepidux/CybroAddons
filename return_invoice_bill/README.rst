@@ -2,13 +2,9 @@
    :target: https://www.gnu.org/licenses/agpl-3.0-standalone.html
    :alt: License: AGPL-3
 
-Automated Credit/Debit Note Generation from Return Picking
-==========================================================
-This module allow to return the invoice  or bill while picking the product in Odoo16.
-
-Company
--------
-* `Cybrosys Techno Solutions <https://cybrosys.com/>`__
+Return Invoices And Bills
+=========================
+This module allow to return the invoice  or bill while picking the product in Odoo15.
 
 Configuration
 =============
@@ -19,6 +15,10 @@ Installation
 - www.odoo.com/documentation/15.0/setup/install.html
 - Install our custom addon
 
+Company
+-------
+* `Cybrosys Techno Solutions <https://cybrosys.com/>`__
+
 License
 -------
 GNU AFFERO GENERAL PUBLIC LICENSE v3.0 (AGPL-3)
@@ -26,7 +26,7 @@ GNU AFFERO GENERAL PUBLIC LICENSE v3.0 (AGPL-3)
 
 Credits
 -------
-Developer: (v15) Dhanya Babu Contact: odoo@cybrosys.com
+Developer: (v15) Dhanya Babu, Contact: odoo@cybrosys.com
 
 Contacts
 --------
@@ -41,6 +41,7 @@ Maintainer
 ==========
 .. image:: https://cybrosys.com/images/logo.png
    :target: https://cybrosys.com
+
 This module is maintained by Cybrosys Technologies.
 For support and more information, please visit `Our Website <https://cybrosys.com/>`__
 

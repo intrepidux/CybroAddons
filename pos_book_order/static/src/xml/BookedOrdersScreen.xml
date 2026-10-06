@@ -7,7 +7,7 @@
                 <div class="rightpane pane-border">
                     <div class="controls">
                         <t t-if="!env.isMobile">
-                            <div class="buttons" t-if="!props.new_order">
+                            <div class="buttons">
                                 <button class="discard"
                                         t-on-click="trigger('close-screen')">
                                     <span class="search-icon">
@@ -17,13 +17,6 @@
                                         Back
                                     </t>
                                 </button>
-                            </div>
-                            <div class="buttons">
-                                <div class="button new" t-on-click="orderDone"
-                                t-if="props.new_order">
-                                <i class="fa fa-plus"/>
-                                New Order
-                                </div>
                             </div>
                         </t>
                     </div>

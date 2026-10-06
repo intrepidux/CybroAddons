@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_kiosk" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.kiosk</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="hr_attendance.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='pincode_setting_container']" position="after">
+                <div class="col-12 col-lg-6 o_setting_box">
+                    <div class="o_setting_left_pane">
+                        <field name="attendance_use_unified_punch"/>
+                    </div>
+                    <div class="o_setting_right_pane">
+                        <label for="attendance_use_unified_punch"/>
+                        <div class="text-muted">
+                            Kiosk scans use the same punch log and calendar pairing as ZK devices.
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-lg-6 o_setting_box">
+                    <div class="o_setting_left_pane">
+                        <field name="attendance_kiosk_collect_geo"/>
+                    </div>
+                    <div class="o_setting_right_pane">
+                        <label for="attendance_kiosk_collect_geo"/>
+                        <div class="text-muted">
+                            Request browser GPS on kiosk punch (phase 1: audit only).
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-lg-6 o_setting_box">
+                    <div class="o_setting_right_pane">
+                        <label for="attendance_kiosk_feedback_seconds"/>
+                        <field name="attendance_kiosk_feedback_seconds"/>
+                        <div class="text-muted">
+                            Duration of the on-screen message after a successful kiosk punch (3–20 s).
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-lg-6 o_setting_box">
+                    <div class="o_setting_right_pane">
+                        <label for="attendance_default_kiosk_machine_id"/>
+                        <field name="attendance_default_kiosk_machine_id"/>
+                        <div class="text-muted">
+                            Used when opening kiosk from the menu if the user has no device assigned.
+                        </div>
+                    </div>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>

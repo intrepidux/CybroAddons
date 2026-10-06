@@ -21,7 +21,7 @@
 ###############################################################################
 {
     'name': 'Display Stock in POS | Restrict Out-of-Stock Products in POS',
-    'version': '15.0.1.0.2',
+    'version': '15.0.1.0.0',
     'category': 'Point of Sale',
     'summary': "Enhance your Point of Sale experience by preventing the "
                "ordering of out-of-stock products during your session",
@@ -35,20 +35,17 @@
     'website': 'https://www.cybrosys.com',
     'depends': ['point_of_sale'],
     'data': [
-        'views/pos_config_views.xml',
+        'views/pos_config_views.xml'
     ],
     'assets': {
         'point_of_sale.assets': [
             '/pos_restrict_product_stock/static/src/css/display_stock.css',
             '/pos_restrict_product_stock/static/src/js/RestrictStockPopup.js',
             '/pos_restrict_product_stock/static/src/js/ProductScreen.js',
-            '/pos_restrict_product_stock/static/src/js/OutOfStockPopup.js',
-            '/pos_restrict_product_stock/static/src/js/ProductItem.js',
         ],
         'web.assets_qweb': [
             '/pos_restrict_product_stock/static/src/xml/ProductItem.xml',
             '/pos_restrict_product_stock/static/src/xml/RestrictStockPopup.xml',
-            '/pos_restrict_product_stock/static/src/xml/OutOfStockPopup.xml',
         ],
     },
     'images': ['static/description/banner.jpg'],

@@ -21,7 +21,7 @@
 ################################################################################
 {
     'name': 'Payment Proof Attachment',
-    'version': '15.0.1.0.2',
+    'version': '15.0.1.0.0',
     'category': 'Website',
     'summary': "Allows to attach proofs in website",
     'description': "This module adds an option to your customer to attach the"
@@ -31,9 +31,7 @@
     'maintainer': 'Cybrosys Techno Solutions',
     'website': 'https://www.cybrosys.com',
     'depends': ['website_sale', 'sale_management', 'mail'],
-    'data': [
-        'data/payment_proof_attachment.xml',
-        'views/sale_portal_templates.xml'],
+    'data': ['views/sale_portal_templates.xml'],
     'assets': {
         'web.assets_frontend': [
             'payment_proof_attachment/static/src/js/my_account_screen.js',

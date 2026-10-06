@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_users_form_kiosk_machine" model="ir.ui.view">
+        <field name="name">res.users.form.kiosk.machine</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="base.view_users_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='preferences']" position="inside">
+                <group string="Attendance kiosk" groups="hr_attendance.group_hr_attendance_kiosk">
+                    <field name="attendance_kiosk_machine_id"
+                           options="{'no_create': True}"
+                           domain="[('device_kind', '=', 'kiosk')]"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_users_form_simple_modif_kiosk" model="ir.ui.view">
+        <field name="name">res.users.preferences.kiosk</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="base.view_users_form_simple_modif"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='email']" position="after">
+                <field name="attendance_kiosk_machine_id"
+                       groups="hr_attendance.group_hr_attendance_kiosk"
+                       domain="[('device_kind', '=', 'kiosk')]"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

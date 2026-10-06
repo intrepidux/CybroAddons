@@ -28,7 +28,7 @@
     'author': 'Cybrosys Techno Solutions, Mostafa Shokiel',
     'company': 'Cybrosys Techno Solutions',
     'website': "https://www.cybrosys.com",
-    'depends': ['base_setup', 'hr_attendance'],
+    'depends': ['base_setup', 'hr_attendance', 'resource', 'hr', 'hr_payroll', 'hr_employee_calendar_history'],
     'data': [
         'security/ir.model.access.csv',
         'views/zk_machine_view.xml',

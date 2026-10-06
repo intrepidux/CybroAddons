@@ -29,17 +29,14 @@ import nextcloud_client
 import os
 import paramiko
 import requests
-import shutil
-import subprocess
 import tempfile
 import odoo
 from datetime import timedelta
 from nextcloud import NextCloud
 from requests.auth import HTTPBasicAuth
 from werkzeug import urls
-from odoo import api, fields, models, _
+from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
-from odoo.tools import find_pg_tool, exec_pg_environ
 from odoo.http import request
 from odoo.service import db
 
@@ -263,30 +260,6 @@ class DbBackupConfigure(models.Model):
     nextcloud_folder_key = fields.Char(string='Next Cloud Folder Id',
                                        help="Field used to store the unique "
                                             "identifier for a Nextcloud folder.")
-    gdrive_backup_error_test = fields.Boolean(string="Google Drive Error Test")
-    onedrive_backup_error_test = fields.Boolean(string="OneDrive Error Test")
-
-    @api.onchange('backup_destination')
-    def _onchange_backup_destination(self):
-        self.write({
-            "gdrive_backup_error_test": False,
-            "onedrive_backup_error_test": False
-        })
-
-    @api.onchange('gdrive_client_key', 'gdrive_client_secret',
-                  'google_drive_folder', 'onedrive_client_key',
-                  'onedrive_client_secret', 'onedrive_folder_key')
-    def _onchange_gdrive_backup_error_test(self):
-        if self.backup_destination == 'google_drive':
-            if self.gdrive_backup_error_test:
-                self.write({
-                    "gdrive_backup_error_test": False
-                })
-        if self.backup_destination == 'onedrive':
-            if self.onedrive_backup_error_test:
-                self.write({
-                    "onedrive_backup_error_test": False
-                })
 
     def action_nextcloud(self):
         """If it has next_cloud_password, domain, and next_cloud_user_name
@@ -480,13 +453,11 @@ class DbBackupConfigure(models.Model):
                     'gdrive_token_validity': fields.Datetime.now() + timedelta(
                         seconds=expires_in) if expires_in else False,
                 })
-                if self.gdrive_backup_error_test:
-                    self.write({
-                        'gdrive_backup_error_test': False
-                    })
-        except Exception:
-            if not self.gdrive_backup_error_test:
-                self.write({"gdrive_backup_error_test": True})
+        except requests.HTTPError:
+            error_msg = _(
+                "Something went wrong during your token generation. Maybe "
+                "your Authorization Code is invalid")
+            raise UserError(error_msg)
 
     @api.depends('onedrive_access_token', 'onedrive_refresh_token')
     def _compute_is_onedrive_token_generated(self):
@@ -595,13 +566,10 @@ class DbBackupConfigure(models.Model):
                     'onedrive_token_validity': fields.Datetime.now() + timedelta
                     (seconds=expires_in) if expires_in else False,
                 })
-                if self.onedrive_backup_error_test:
-                    self.write({
-                        'onedrive_backup_error_test': False
-                    })
-        except Exception:
-            if not self.onedrive_backup_error_test:
-                self.write({"onedrive_backup_error_test": True})
+        except requests.HTTPError as error:
+            _logger.exception("Bad microsoft onedrive request : %s !",
+                              error.response.content)
+            raise error
 
     def get_dropbox_auth_url(self):
         """Return dropbox authorization url"""
@@ -612,20 +580,16 @@ class DbBackupConfigure(models.Model):
 
     def set_dropbox_refresh_token(self, auth_code):
         """Generate and set the dropbox refresh token from authorization code"""
-        try:
-            dbx_auth = dropbox.oauth.DropboxOAuth2FlowNoRedirect(
-                self.dropbox_client_key, self.dropbox_client_secret,
-                token_access_type='offline')
-            outh_result = dbx_auth.finish(auth_code)
-            self.dropbox_refresh_token = outh_result.refresh_token
-        except Exception:
-            raise ValidationError(
-                'Please Enter Valid Authentication Code')
+        dbx_auth = dropbox.oauth.DropboxOAuth2FlowNoRedirect(
+            self.dropbox_client_key, self.dropbox_client_secret,
+            token_access_type='offline')
+        outh_result = dbx_auth.finish(auth_code)
+        self.dropbox_refresh_token = outh_result.refresh_token
 
     @api.constrains('db_name')
     def _check_db_credentials(self):
         """Validate entered database name and master password"""
-        database_list = db.list_dbs(force=True)
+        database_list = db.list_dbs()
         if self.db_name not in database_list:
             raise ValidationError(_("Invalid Database Name!"))
         try:
@@ -701,7 +665,7 @@ class DbBackupConfigure(models.Model):
                         os.makedirs(rec.backup_path)
                     backup_file = os.path.join(rec.backup_path, backup_filename)
                     fds = open(backup_file, "wb")
-                    self.dump_data(rec.db_name, fds, rec.backup_format)
+                    odoo.service.db.dump_db(rec.db_name, fds, rec.backup_format)
                     fds.close()
                     # remove older backups
                     if rec.auto_remove:
@@ -735,8 +699,8 @@ class DbBackupConfigure(models.Model):
                         ftp_server.mkd(rec.ftp_path)
                         ftp_server.cwd(rec.ftp_path)
                     with open(temp.name, "wb+") as tmp:
-                        self.dump_data(rec.db_name, tmp,
-                                       rec.backup_format)
+                        odoo.service.db.dump_db(rec.db_name, tmp,
+                                                rec.backup_format)
                     ftp_server.storbinary('STOR %s' % backup_filename,
                                           open(temp.name, "rb"))
                     if rec.auto_remove:
@@ -770,7 +734,8 @@ class DbBackupConfigure(models.Model):
                     temp = tempfile.NamedTemporaryFile(
                         suffix='.%s' % rec.backup_format)
                     with open(temp.name, "wb+") as tmp:
-                        self.dump_data(rec.db_name, tmp, rec.backup_format)
+                        odoo.service.db.dump_db(rec.db_name, tmp,
+                                                rec.backup_format)
                     try:
                         sftp.chdir(rec.sftp_path)
                     except IOError as e:
@@ -799,155 +764,129 @@ class DbBackupConfigure(models.Model):
                     client.close()
             # Google Drive backup
             elif rec.backup_destination == 'google_drive':
+                if (rec.gdrive_token_validity is not False and
+                        rec.gdrive_token_validity <= fields.Datetime.now()):
+                    rec.generate_gdrive_refresh_token()
+                temp = tempfile.NamedTemporaryFile(
+                    suffix='.%s' % rec.backup_format)
+                with open(temp.name, "wb+") as tmp:
+                    odoo.service.db.dump_db(rec.db_name, tmp, rec.backup_format)
                 try:
-                    if (rec.gdrive_token_validity is not False and
-                            rec.gdrive_token_validity <= fields.Datetime.now()):
-                        rec.generate_gdrive_refresh_token()
-                    temp = tempfile.NamedTemporaryFile(
-                        suffix='.%s' % rec.backup_format)
-                    with open(temp.name, "wb+") as tmp:
-                        self.dump_data(rec.db_name, tmp,
-                                       rec.backup_format)
-                    try:
-                        headers = {
-                            "Authorization": "Bearer %s" % rec.gdrive_access_token}
-                        para = {
-                            "name": backup_filename,
-                            "parents": [rec.google_drive_folder_key],
-                        }
-                        files = {
-                            'data': ('metadata', json.dumps(para),
-                                     'application/json; charset=UTF-8'),
-                            'file': open(temp.name, "rb")
-                        }
-                        requests.post(
-                            "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
-                            headers=headers,
-                            files=files
-                        )
-                        if rec.auto_remove:
-                            query = "parents = '%s'" % rec.google_drive_folder_key
-                            files_req = requests.get(
-                                "https://www.googleapis.com/drive/v3/files?q=%s" % query,
-                                headers=headers)
-                            files = files_req.json()['files']
-                            for file in files:
-                                file_date_req = requests.get(
-                                    "https://www.googleapis.com/drive/v3/files/%s?fields=createdTime" %
+                    headers = {
+                        "Authorization": "Bearer %s" % rec.gdrive_access_token}
+                    para = {
+                        "name": backup_filename,
+                        "parents": [rec.google_drive_folder_key],
+                    }
+                    files = {
+                        'data': ('metadata', json.dumps(para),
+                                 'application/json; charset=UTF-8'),
+                        'file': open(temp.name, "rb")
+                    }
+                    requests.post(
+                        "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+                        headers=headers,
+                        files=files
+                    )
+                    if rec.auto_remove:
+                        query = "parents = '%s'" % rec.google_drive_folder_key
+                        files_req = requests.get(
+                            "https://www.googleapis.com/drive/v3/files?q=%s" % query,
+                            headers=headers)
+                        files = files_req.json()['files']
+                        for file in files:
+                            file_date_req = requests.get(
+                                "https://www.googleapis.com/drive/v3/files/%s?fields=createdTime" %
+                                file['id'], headers=headers)
+                            create_time = file_date_req.json()['createdTime'][
+                                          :19].replace('T', ' ')
+                            diff_days = (
+                                    fields.datetime.now()
+                                    - fields.datetime.strptime(
+                                create_time, '%Y-%m-%d %H:%M:%S')).days
+                            if diff_days >= rec.days_to_remove:
+                                requests.delete(
+                                    "https://www.googleapis.com/drive/v3/files/%s" %
                                     file['id'], headers=headers)
-                                create_time = file_date_req.json()['createdTime'][
-                                              :19].replace('T', ' ')
-                                diff_days = (
-                                        fields.datetime.now()
-                                        - fields.datetime.strptime(
-                                    create_time, '%Y-%m-%d %H:%M:%S')).days
-                                if diff_days >= rec.days_to_remove:
-                                    requests.delete(
-                                        "https://www.googleapis.com/drive/v3/files/%s" %
-                                        file['id'], headers=headers)
-                        if rec.notify_user:
-                            mail_template_success.send_mail(rec.id, force_send=True)
-                    except Exception as e:
-                        rec.generated_exception = e
-                        _logger.info('Google Drive Exception: %s', e)
-                        if rec.notify_user:
-                            mail_template_failed.send_mail(rec.id, force_send=True)
-                except Exception:
+                    if rec.notify_user:
+                        mail_template_success.send_mail(rec.id, force_send=True)
+                except Exception as e:
+                    rec.generated_exception = e
+                    _logger.info('Google Drive Exception: %s', e)
                     if rec.notify_user:
                         mail_template_failed.send_mail(rec.id, force_send=True)
-                        raise ValidationError(
-                            'Please check the credentials before activation')
-                    else:
-                        raise ValidationError('Please check connection')
             # Dropbox backup
             elif rec.backup_destination == 'dropbox':
+                temp = tempfile.NamedTemporaryFile(
+                    suffix='.%s' % rec.backup_format)
+                with open(temp.name, "wb+") as tmp:
+                    odoo.service.db.dump_db(rec.db_name, tmp, rec.backup_format)
                 try:
-                    temp = tempfile.NamedTemporaryFile(
-                        suffix='.%s' % rec.backup_format)
-                    with open(temp.name, "wb+") as tmp:
-                        self.dump_data(rec.db_name, tmp,
-                                       rec.backup_format)
-                    try:
-                        drop_connection = dropbox.Dropbox(
-                            app_key=rec.dropbox_client_key,
-                            app_secret=rec.dropbox_client_secret,
-                            oauth2_refresh_token=rec.dropbox_refresh_token)
-                        dropbox_destination = rec.dropbox_folder + '/' + backup_filename
-                        drop_connection.files_upload(temp.read(),
-                                                     dropbox_destination)
-                        if rec.auto_remove:
-                            files = drop_connection.files_list_folder(
-                                rec.dropbox_folder)
-                            file_entries = files.entries
-                            expired_files = list(filter(
-                                lambda fl: (fields.datetime.now() -
-                                            fl.client_modified).days >=
-                                           rec.days_to_remove,
-                                file_entries))
-                            for file in expired_files:
-                                drop_connection.files_delete_v2(file.path_display)
-                        if rec.notify_user:
-                            mail_template_success.send_mail(rec.id, force_send=True)
-                    except Exception as error:
-                        rec.generated_exception = error
-                        _logger.info('Dropbox Exception: %s', error)
-                        if rec.notify_user:
-                            mail_template_failed.send_mail(rec.id, force_send=True)
-                except Exception:
+                    drop_connection = dropbox.Dropbox(
+                        app_key=rec.dropbox_client_key,
+                        app_secret=rec.dropbox_client_secret,
+                        oauth2_refresh_token=rec.dropbox_refresh_token)
+                    dropbox_destination = rec.dropbox_folder + '/' + backup_filename
+                    drop_connection.files_upload(temp.read(),
+                                                 dropbox_destination)
+                    if rec.auto_remove:
+                        files = drop_connection.files_list_folder(
+                            rec.dropbox_folder)
+                        file_entries = files.entries
+                        expired_files = list(filter(
+                            lambda fl: (fields.datetime.now() -
+                                        fl.client_modified).days >=
+                                       rec.days_to_remove,
+                            file_entries))
+                        for file in expired_files:
+                            drop_connection.files_delete_v2(file.path_display)
+                    if rec.notify_user:
+                        mail_template_success.send_mail(rec.id, force_send=True)
+                except Exception as error:
+                    rec.generated_exception = error
+                    _logger.info('Dropbox Exception: %s', error)
                     if rec.notify_user:
                         mail_template_failed.send_mail(rec.id, force_send=True)
-                        raise ValidationError(
-                            'Please check the credentials before activation')
-                    else:
-                        raise ValidationError('Please check connection')
             # Onedrive Backup
             elif rec.backup_destination == 'onedrive':
+                if (rec.onedrive_token_validity is not False and
+                        rec.onedrive_token_validity <= fields.Datetime.now()):
+                    rec.generate_onedrive_refresh_token()
+                temp = tempfile.NamedTemporaryFile(
+                    suffix='.%s' % rec.backup_format)
+                with open(temp.name, "wb+") as tmp:
+                    odoo.service.db.dump_db(rec.db_name, tmp, rec.backup_format)
+                headers = {
+                    'Authorization': 'Bearer %s' % rec.onedrive_access_token,
+                    'Content-Type': 'application/json'}
+                upload_session_url = MICROSOFT_GRAPH_END_POINT + "/v1.0/me/drive/items/%s:/%s:/createUploadSession" % (
+                    rec.onedrive_folder_key, backup_filename)
                 try:
-                    if (rec.onedrive_token_validity is not False and
-                            rec.onedrive_token_validity <= fields.Datetime.now()):
-                        rec.generate_onedrive_refresh_token()
-                    temp = tempfile.NamedTemporaryFile(
-                        suffix='.%s' % rec.backup_format)
-                    with open(temp.name, "wb+") as tmp:
-                        self.dump_data(rec.db_name, tmp, rec.backup_format)
-                    headers = {
-                        'Authorization': 'Bearer %s' % rec.onedrive_access_token,
-                        'Content-Type': 'application/json'}
-                    upload_session_url = MICROSOFT_GRAPH_END_POINT + "/v1.0/me/drive/items/%s:/%s:/createUploadSession" % (
-                        rec.onedrive_folder_key, backup_filename)
-                    try:
-                        upload_session = requests.post(upload_session_url,
-                                                       headers=headers)
-                        upload_url = upload_session.json().get('uploadUrl')
-                        requests.put(upload_url, data=temp.read())
-                        if rec.auto_remove:
-                            list_url = MICROSOFT_GRAPH_END_POINT + "/v1.0/me/drive/items/%s/children" % rec.onedrive_folder_key
-                            response = requests.get(list_url, headers=headers)
-                            files = response.json().get('value')
-                            for file in files:
-                                create_time = file['createdDateTime'][:19].replace(
-                                    'T', ' ')
-                                diff_days = (
-                                        fields.datetime.now() - fields.datetime.strptime(
-                                    create_time, '%Y-%m-%d %H:%M:%S')).days
-                                if diff_days >= rec.days_to_remove:
-                                    delete_url = MICROSOFT_GRAPH_END_POINT + "/v1.0/me/drive/items/%s" % \
-                                                 file['id']
-                                    requests.delete(delete_url, headers=headers)
-                        if rec.notify_user:
-                            mail_template_success.send_mail(rec.id, force_send=True)
-                    except Exception as error:
-                        rec.generated_exception = error
-                        _logger.info('Onedrive Exception: %s', error)
-                        if rec.notify_user:
-                            mail_template_failed.send_mail(rec.id, force_send=True)
-                except Exception:
+                    upload_session = requests.post(upload_session_url,
+                                                   headers=headers)
+                    upload_url = upload_session.json().get('uploadUrl')
+                    requests.put(upload_url, data=temp.read())
+                    if rec.auto_remove:
+                        list_url = MICROSOFT_GRAPH_END_POINT + "/v1.0/me/drive/items/%s/children" % rec.onedrive_folder_key
+                        response = requests.get(list_url, headers=headers)
+                        files = response.json().get('value')
+                        for file in files:
+                            create_time = file['createdDateTime'][:19].replace(
+                                'T', ' ')
+                            diff_days = (
+                                    fields.datetime.now() - fields.datetime.strptime(
+                                create_time, '%Y-%m-%d %H:%M:%S')).days
+                            if diff_days >= rec.days_to_remove:
+                                delete_url = MICROSOFT_GRAPH_END_POINT + "/v1.0/me/drive/items/%s" % \
+                                             file['id']
+                                requests.delete(delete_url, headers=headers)
+                    if rec.notify_user:
+                        mail_template_success.send_mail(rec.id, force_send=True)
+                except Exception as error:
+                    rec.generated_exception = error
+                    _logger.info('Onedrive Exception: %s', error)
                     if rec.notify_user:
                         mail_template_failed.send_mail(rec.id, force_send=True)
-                        raise ValidationError(
-                            'Please check the credentials before activation')
-                    else:
-                        raise ValidationError('Please check connection')
             # amazon S3 backup
             elif rec.backup_destination == 'amazon_s3':
                 if rec.aws_access_key and rec.aws_secret_access_key:
@@ -983,8 +922,8 @@ class DbBackupConfigure(models.Model):
                             temp = tempfile.NamedTemporaryFile(
                                 suffix='.%s' % rec.backup_format)
                             with open(temp.name, "wb+") as tmp:
-                                self.dump_data(rec.db_name, tmp,
-                                               rec.backup_format)
+                                odoo.service.db.dump_db(rec.db_name, tmp,
+                                                        rec.backup_format)
                             backup_file_path = temp.name
                             remote_file_path = \
                                 f"{rec.aws_folder_name}/{rec.db_name}_" \
@@ -1026,149 +965,77 @@ class DbBackupConfigure(models.Model):
                                                            force_send=True)
             # nextcloud backup
             elif rec.backup_destination == 'next_cloud':
-                try:
-                    if rec.domain and rec.next_cloud_password and \
-                            rec.next_cloud_user_name:
-                        try:
-                            # Connect to NextCloud using the provided username
-                            # and password
-                            ncx = NextCloud(rec.domain,
-                                            auth=HTTPBasicAuth(
-                                                rec.next_cloud_user_name,
-                                                rec.next_cloud_password))
-                            # Connect to NextCloud again to perform additional
-                            # operations
-                            nc = nextcloud_client.Client(rec.domain)
-                            nc.login(rec.next_cloud_user_name,
-                                     rec.next_cloud_password)
-                            # Get the folder name from the NextCloud folder ID
-                            folder_name = rec.nextcloud_folder_key
-                            # If auto_remove is enabled, remove backup files
-                            # older than specified days
-                            if rec.auto_remove:
-                                folder_path = "/" + folder_name
-                                for item in nc.list(folder_path):
-                                    backup_file_name = item.path.split("/")[-1]
-                                    backup_date_str = backup_file_name.split("_")[
-                                        2]
-                                    backup_date = fields.datetime.strptime(
-                                        backup_date_str, '%Y-%m-%d').date()
-                                    if (fields.date.today() - backup_date).days \
-                                            >= rec.days_to_remove:
-                                        nc.delete(item.path)
-                            # If notify_user is enabled, send a success email
+                if rec.domain and rec.next_cloud_password and \
+                        rec.next_cloud_user_name:
+                    try:
+                        # Connect to NextCloud using the provided username
+                        # and password
+                        ncx = NextCloud(rec.domain,
+                                        auth=HTTPBasicAuth(
+                                            rec.next_cloud_user_name,
+                                            rec.next_cloud_password))
+                        # Connect to NextCloud again to perform additional
+                        # operations
+                        nc = nextcloud_client.Client(rec.domain)
+                        nc.login(rec.next_cloud_user_name,
+                                 rec.next_cloud_password)
+                        # Get the folder name from the NextCloud folder ID
+                        folder_name = rec.nextcloud_folder_key
+                        # If auto_remove is enabled, remove backup files
+                        # older than specified days
+                        if rec.auto_remove:
+                            folder_path = "/" + folder_name
+                            for item in nc.list(folder_path):
+                                backup_file_name = item.path.split("/")[-1]
+                                backup_date_str = backup_file_name.split("_")[
+                                    2]
+                                backup_date = fields.datetime.strptime(
+                                    backup_date_str, '%Y-%m-%d').date()
+                                if (fields.date.today() - backup_date).days \
+                                        >= rec.days_to_remove:
+                                    nc.delete(item.path)
+                        # If notify_user is enabled, send a success email
+                        # notification
+                        if rec.notify_user:
+                            mail_template_success.send_mail(rec.id,
+                                                            force_send=True)
+                    except Exception as error:
+                        rec.generated_exception = error
+                        _logger.info('NextCloud Exception: %s', error)
+                        if rec.notify_user:
+                            # If an exception occurs, send a failed email
                             # notification
-                            if rec.notify_user:
-                                mail_template_success.send_mail(rec.id,
-                                                                force_send=True)
-                        except Exception as error:
-                            rec.generated_exception = error
-                            _logger.info('NextCloud Exception: %s', error)
-                            if rec.notify_user:
-                                # If an exception occurs, send a failed email
-                                # notification
-                                mail_template_failed.send_mail(rec.id,
-                                                               force_send=True)
-                        # Get the list of folders in the root directory of NextCloud
-                        data = ncx.list_folders('/').__dict__
-                        folders = [
-                            [file_name['href'].split('/')[-2], file_name['file_id']]
-                            for file_name in data['data'] if
-                            file_name['href'].endswith('/')]
-                        # If the folder name is not found in the list of folders,
-                        # create the folder
-                        if folder_name.replace('/', '') not in [file[0] for file in
-                                                                folders]:
-                            nc.mkdir(folder_name)
-                            # Dump the database to a temporary file
-                            temp = tempfile.NamedTemporaryFile(
-                                suffix='.%s' % rec.backup_format)
-                            with open(temp.name, "wb+") as tmp:
-                                self.dump_data(rec.db_name, tmp,
-                                               rec.backup_format)
-                            backup_file_path = temp.name
-                            remote_file_path = f"/{folder_name}/{rec.db_name}_" \
-                                               f"{backup_time}.{rec.backup_format}"
-                            nc.put_file(remote_file_path, backup_file_path)
-                        else:
-                            # Dump the database to a temporary file
-                            temp = tempfile.NamedTemporaryFile(
-                                suffix='.%s' % rec.backup_format)
-                            with open(temp.name, "wb+") as tmp:
-                                self.dump_data(rec.db_name, tmp,
-                                               rec.backup_format)
-                            backup_file_path = temp.name
-                            remote_file_path = f"/{folder_name}/{rec.db_name}_" \
-                                               f"{backup_time}.{rec.backup_format}"
-                            nc.put_file(remote_file_path, backup_file_path)
-                except Exception:
-                    if rec.notify_user:
-                        mail_template_failed.send_mail(rec.id, force_send=True)
-                        raise ValidationError(
-                            'Please check the credentials before activation')
+                            mail_template_failed.send_mail(rec.id,
+                                                           force_send=True)
+                    # Get the list of folders in the root directory of NextCloud
+                    data = ncx.list_folders('/').__dict__
+                    folders = [
+                        [file_name['href'].split('/')[-2], file_name['file_id']]
+                        for file_name in data['data'] if
+                        file_name['href'].endswith('/')]
+                    # If the folder name is not found in the list of folders,
+                    # create the folder
+                    if folder_name.replace('/', '') not in [file[0] for file in
+                                                            folders]:
+                        nc.mkdir(folder_name)
+                        # Dump the database to a temporary file
+                        temp = tempfile.NamedTemporaryFile(
+                            suffix='.%s' % rec.backup_format)
+                        with open(temp.name, "wb+") as tmp:
+                            odoo.service.db.dump_db(rec.db_name, tmp,
+                                                    rec.backup_format)
+                        backup_file_path = temp.name
+                        remote_file_path = f"/{folder_name}/{rec.db_name}_" \
+                                           f"{backup_time}.{rec.backup_format}"
+                        nc.put_file(remote_file_path, backup_file_path)
                     else:
-                        raise ValidationError('Please check connection')
-
-    def dump_data(self, db_name, stream, backup_format):
-        """Dump database `db` into file-like object `stream` if stream is None
-        return a file object with the dump. """
-        cron_user_id = self.env.ref('auto_database_backup.ir_cron_auto_db_backup').user_id.id
-        if cron_user_id != self.env.user.id:
-            _logger.error(
-                'Unauthorized database operation. Backups should only be available from the cron job.')
-            raise ValidationError(
-                "Unauthorized database operation. Backups should only be available from the cron job.")
-
-        _logger.info('DUMP DB: %s format %s', db_name, backup_format)
-        cmd = [find_pg_tool('pg_dump'), '--no-owner', db_name]
-        env = exec_pg_environ()
-        if backup_format == 'zip':
-            with tempfile.TemporaryDirectory() as dump_dir:
-                filestore = odoo.tools.config.filestore(db_name)
-                cmd.append('--file=' + os.path.join(dump_dir, 'dump.sql'))
-                subprocess.run(cmd, env=env, stdout=subprocess.DEVNULL,
-                               stderr=subprocess.STDOUT, check=True)
-                if os.path.exists(filestore):
-                    shutil.copytree(filestore,
-                                    os.path.join(dump_dir, 'filestore'))
-                with open(os.path.join(dump_dir, 'manifest.json'), 'w') as fh:
-                    db = odoo.sql_db.db_connect(db_name)
-                    with db.cursor() as cr:
-                        json.dump(self._dump_db_manifest(cr), fh, indent=4)
-                if stream:
-                    odoo.tools.osutil.zip_dir(dump_dir, stream,
-                                              include_dir=False,
-                                              fnct_sort=lambda
-                                                  file_name: file_name != 'dump.sql')
-                else:
-                    t = tempfile.TemporaryFile()
-                    odoo.tools.osutil.zip_dir(dump_dir, t, include_dir=False,
-                                              fnct_sort=lambda
-                                                  file_name: file_name != 'dump.sql')
-                    t.seek(0)
-                    return t
-        else:
-            cmd.append('--format=c')
-            process = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE)
-            stdout, _ = process.communicate()
-            if stream:
-                stream.write(stdout)
-            else:
-                return stdout
-
-    def _dump_db_manifest(self, cr):
-        """ This function generates a manifest dictionary for database dump."""
-        pg_version = "%d.%d" % divmod(cr._obj.connection.server_version / 100, 100)
-        cr.execute(
-            "SELECT name, latest_version FROM ir_module_module WHERE state = 'installed'")
-        modules = dict(cr.fetchall())
-        manifest = {
-            'odoo_dump': '1',
-            'db_name': cr.dbname,
-            'version': odoo.release.version,
-            'version_info': odoo.release.version_info,
-            'major_version': odoo.release.major_version,
-            'pg_version': pg_version,
-            'modules': modules,
-        }
-        return manifest
+                        # Dump the database to a temporary file
+                        temp = tempfile.NamedTemporaryFile(
+                            suffix='.%s' % rec.backup_format)
+                        with open(temp.name, "wb+") as tmp:
+                            odoo.service.db.dump_db(rec.db_name, tmp,
+                                                    rec.backup_format)
+                        backup_file_path = temp.name
+                        remote_file_path = f"/{folder_name}/{rec.db_name}_" \
+                                           f"{backup_time}.{rec.backup_format}"
+                        nc.put_file(remote_file_path, backup_file_path)

@@ -1,5 +1,7 @@
 .modal {
   display: none; /* Hidden by default */
+  position: fixed; /* Stay in place */
+  z-index: 1; /* Sit on top */
   padding-top: 100px; /* Location of the box */
   left: 0;
   top: 0;
@@ -11,7 +13,7 @@
 }
 
 /* Modal Content */
-#modal_for_attachment {
+.modal-content {
   position: relative;
   background-color: #fefefe;
   margin: auto;
@@ -50,15 +52,15 @@
   cursor: pointer;
 }
 
-#payment_proof_modal_header {
+.modal-header {
   padding: 2px 16px;
   background-color: #71639E;
   color: white;
 }
 
-#payment_proof_modal_body { {padding: 2px 16px;}
+.modal-body {padding: 2px 16px;}
 
-#payment_proof_modal_footer {
+.modal-footer {
   padding: 2px 16px;
   background-color: #71639E;
   color: white;

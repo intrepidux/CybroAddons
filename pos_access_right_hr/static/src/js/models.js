@@ -1,5 +1,6 @@
 odoo.define('pos_access_right_hr.models', function(require) {
  'use strict';
+
     var models = require('point_of_sale.models');
     /**
     To load fields from hr.employee into pos

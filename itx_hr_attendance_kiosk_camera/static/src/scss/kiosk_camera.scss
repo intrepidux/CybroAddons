@@ -1,0 +1,13 @@
+.o_itx_kiosk_camera_wrap {
+    max-width: 320px;
+    margin: 0 auto;
+}
+
+.o_itx_kiosk_camera_video {
+    width: 100%;
+    min-height: 200px;
+    max-height: 40vh;
+    object-fit: cover;
+    border-radius: 8px;
+    background: #000;
+}

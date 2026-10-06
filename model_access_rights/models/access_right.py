@@ -33,7 +33,7 @@ class AccessRight(models.Model):
     model_id = fields.Many2one('ir.model', ondelete='cascade',
                                required=True, string="Model",
                                help="Select the model")
-    groups_id = fields.Many2one('res.groups',
+    groups_id = fields.Many2one('res.groups', required=True,
                                 string="Groups", help="Select the group")
     is_delete = fields.Boolean(string="Delete", help="Hide the delete option")
     is_export = fields.Boolean(string="Export",
@@ -43,45 +43,28 @@ class AccessRight(models.Model):
                                          help="Hide the create option "
                                               "from list as well as form view")
     is_archive = fields.Boolean(string="Archive/UnArchive",
-                                help="hide the archive option")
-    restriction_type = fields.Selection([
-        ('user', 'User Wise'),
-        ('group', 'Group Wise')
-    ], 'Restriction Type', required=True, default="group")
-    user_id = fields.Many2one('res.users',
-                              help="select the user")
+                                help="Hide the archive option")
 
     @api.model
-    def hide_buttons(self):
+    def hide_buttons(self, args):
         """This function contains a query  that detects which all options want
         to hide, in which model,and to which user groups"""
-        access_right_rec = self.sudo().search_read([], ['model_id', 'is_delete',
-                                                        'is_export',
-                                                        'is_create_or_update',
-                                                        'is_archive',
-                                                        'restriction_type',
-                                                        'user_id',
-                                                        'groups_id'])
-        for dic in access_right_rec:
-            model = self.env['ir.model'].sudo().browse(dic['model_id'][0]).model
-            if dic['restriction_type'] == "group":
-                group_name = self.env['ir.model.data'].sudo().search([
-                    ('model', '=', 'res.groups'),
-                    ('res_id', '=', dic['groups_id'][0])
-                ]).name
-
-                module_name = self.env['ir.model.data'].sudo().search([
-                    ('model', '=', 'res.groups'),
-                    ('res_id', '=', dic['groups_id'][0])
-                ]).module
-            else:
-                group_name=False
-                module_name=False
-            dic.update({
-                'model': model,
-                'group_name': group_name,
-                'module': module_name,
-                'restriction_type': dic['restriction_type'],
-                'user':  dic['user_id']
-            })
-        return access_right_rec
+        access_right_rec = self.sudo().search_read([],
+                                                   ['model_id', 'is_delete',
+                                                    'is_export',
+                                                    'is_create_or_update',
+                                                    'is_archive',
+                                                    'groups_id'])
+        for rec in access_right_rec:
+            model_id = self.env['ir.model'].sudo(). \
+                browse(rec['model_id'][0]).model
+            if str(model_id) == args[1]:
+                groups = self.env['res.users'].browse(args[0]).groups_id.ids
+                if rec['groups_id'][0] in groups:
+                    data = {
+                        'is_delete': rec['is_delete'],
+                        'is_export': rec['is_export'],
+                        'is_create_or_update': rec['is_create_or_update'],
+                        'is_archive': rec['is_archive']
+                    }
+                    return data

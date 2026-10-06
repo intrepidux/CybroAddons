@@ -10,8 +10,7 @@ import {Gui} from 'point_of_sale.Gui';
 class BookOrderPopup extends AbstractAwaitablePopup {
     setup() {
         super.setup()
-        this.order = this.env.pos.get_order();
-
+        this.order = this.env.pos.get_order()
     }
     async onConfirm() {
         // On clicking confirm button of popup a new book order with draft stage will created from the backend
@@ -24,7 +23,6 @@ class BookOrderPopup extends AbstractAwaitablePopup {
         var date = this.order.creation_date;
         var line = this.order.get_orderlines();
         var price_list = this.order.pricelist.id;
-        var uid = this.order.uid;
         var product = {
             'product_id': [],
             'qty': [],
@@ -35,23 +33,11 @@ class BookOrderPopup extends AbstractAwaitablePopup {
             product['qty'].push(line[i].quantity)
             product['price'].push(line[i].price)
         };
-        var self = this
-        await this.rpc({
-        //  this call for is creating a book order in the backend based on the value in popup
+        await rpc.query({
+        //  This call for is creating a book order in the backend based on the value in popup
             model: 'book.order',
             method: 'create_booked_order',
-            args: [partner, phone, address, date, price_list, product, order_note, pickup_date, delivery_date,uid]
-        }).then(function(book_order) {
-            self.order.booking_ref_id=book_order
-        })
-        await this.rpc({
-            model: 'book.order',
-            method: 'all_orders',
-        }).then(function(result) {
-            self.showScreen('BookedOrdersScreen', {
-                data: result,
-                new_order: true,
-            });
+            args: [partner, phone, address, date, price_list, product, order_note, pickup_date, delivery_date]
         })
         this.cancel();
     }

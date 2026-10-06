@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-inherit="hr_attendance.HrAttendanceKioskMode" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('o_hr_attendance_kiosk_welcome_row')]" position="before">
+            <div class="o_itx_kiosk_camera_wrap d-none mb16 text-center">
+                <button type="button" class="btn btn-primary o_itx_kiosk_camera_toggle mb-2">
+                    Activate camera
+                </button>
+                <div class="o_itx_kiosk_camera_preview d-none">
+                    <video class="o_itx_kiosk_camera_video" autoplay="autoplay" playsinline="playsinline" muted="muted"/>
+                    <p class="text-muted text-center mt8 mb0 o_itx_kiosk_camera_hint">Point the camera at your badge barcode</p>
+                </div>
+            </div>
+        </xpath>
+    </t>
+</templates>

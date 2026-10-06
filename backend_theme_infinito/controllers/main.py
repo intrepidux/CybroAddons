@@ -25,7 +25,6 @@ import re
 
 from odoo import http
 from odoo.http import request
-from odoo.modules.module import get_module_resource
 
 
 def minify_css(path):
@@ -83,7 +82,9 @@ class ThemeStudio(http.Controller):
     def save_styles(self, changed_styles, object_class, hover=False):
         """Create Dynamic Styles css file"""
         changed_styles = json.loads(changed_styles)
-        file_path = get_module_resource('backend_theme_infinito', 'static', 'src', 'css', 'dynamic_styles.css')
+        working_dir = os.path.dirname(os.path.realpath(__file__))
+        working_dir = working_dir.replace('/controllers', '')
+        file_path = working_dir + '/static/src/css/dynamic_styles.css'
         style_file = open(file_path, 'a')
         if os.stat(file_path).st_size == 0:
             style_file.write('/* This file is generated automatically by '
@@ -101,7 +102,9 @@ class ThemeStudio(http.Controller):
 
     @http.route(['/theme_studio/get_current_style'], type="json")
     def get_current_style(self, selector):
-        file_path = get_module_resource('backend_theme_infinito', 'static', 'src', 'css', 'dynamic_styles.css')
+        working_dir = os.path.dirname(os.path.realpath(__file__))
+        file_path = working_dir.replace('controllers',
+                                        'static/src/css/dynamic_styles.css')
         style_file = open(file_path, 'r')
         css = style_file.read()
         css = re.sub(r'/\*[\s\S]*?\*/', "", css)
@@ -127,7 +130,9 @@ class ThemeStudio(http.Controller):
 
     @http.route(['/theme_studio/reset_to_default'], type="json")
     def reset_to_default(self):
-        file_path = get_module_resource('backend_theme_infinito', 'static', 'src', 'css', 'dynamic_styles.css')
+        working_dir = os.path.dirname(os.path.realpath(__file__))
+        file_path = working_dir.replace('controllers',
+                                        'static/src/css/dynamic_styles.css')
         style_file = open(file_path, 'w')
         style_file.write('')
         return True
@@ -218,7 +223,10 @@ class ThemeStudio(http.Controller):
 
     @http.route(['/theme_studio/get_presets'], type="json")
     def get_presets(self):
-        file_path = get_module_resource('backend_theme_infinito', 'static', 'src', 'json', 'presets.json')
+        working_dir = os.path.dirname(os.path.realpath(__file__))
+        working_dir = working_dir.replace('/controllers', '')
+        file_path = working_dir + '/static/src/json/presets.json'
         file = open(file_path, 'r')
         presets = json.load(file)
+
         return presets

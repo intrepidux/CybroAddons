@@ -19,6 +19,5 @@
 #    If not, see <http://www.gnu.org/licenses/>.
 #
 ##############################################################################
-from . import account_move
 from . import stock_picking
 from . import stock_return_picking

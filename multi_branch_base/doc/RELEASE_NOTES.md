@@ -10,9 +10,4 @@
 ##### FIX
 - Bug Fixed
 
-#### 13.08.2024
-#### Version 15.0.1.0.2
-##### FIX
-- Fixed issue in the create function
-
 

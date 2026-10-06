@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_zk_machine_form_kiosk" model="ir.ui.view">
+        <field name="name">zk.machine.form.kiosk</field>
+        <field name="model">zk.machine</field>
+        <field name="inherit_id" ref="hr_zk_attendance.view_zk_machine_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_regenerate_kiosk_token" type="object"
+                        string="Regenerate kiosk token"
+                        attrs="{'invisible': [('device_kind', '!=', 'kiosk')]}"/>
+            </xpath>
+            <xpath expr="//field[@name='name']" position="before">
+                <field name="device_kind"/>
+                <field name="active"/>
+            </xpath>
+            <xpath expr="//sheet/group" position="after">
+                <group string="Kiosk" attrs="{'invisible': [('device_kind', '!=', 'kiosk')]}">
+                    <field name="kiosk_token" readonly="1"/>
+                    <field name="kiosk_enrollment_url" widget="url" readonly="1"/>
+                    <field name="default_address_id"/>
+                    <field name="geofence_ids" widget="many2many_tags"/>
+                </group>
+                <group string="Access control">
+                    <field name="allowed_department_ids" widget="many2many_tags"/>
+                    <field name="allowed_employee_ids" widget="many2many_tags"/>
+                </group>
+            </xpath>
+            <xpath expr="//button[@name='download_attendance']" position="attributes">
+                <attribute name="attrs">{'invisible': [('device_kind', '=', 'kiosk')]}</attribute>
+            </xpath>
+            <xpath expr="//button[@name='test_connection']" position="attributes">
+                <attribute name="attrs">{'invisible': [('device_kind', '=', 'kiosk')]}</attribute>
+            </xpath>
+            <xpath expr="//button[@name='clear_attendance']" position="attributes">
+                <attribute name="attrs">{'invisible': [('device_kind', '=', 'kiosk')]}</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_zk_machine_tree_kiosk" model="ir.ui.view">
+        <field name="name">zk.machine.tree.kiosk</field>
+        <field name="model">zk.machine</field>
+        <field name="inherit_id" ref="hr_zk_attendance.view_zk_machine_tree"/>
+        <field name="arch" type="xml">
+            <field name="name" position="after">
+                <field name="device_kind"/>
+            </field>
+        </field>
+    </record>
+</odoo>

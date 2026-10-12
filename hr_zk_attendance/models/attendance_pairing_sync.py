@@ -6,8 +6,23 @@ import logging
 import pytz
 
 from odoo import api, fields, models
+from odoo.exceptions import ValidationError
+
+try:
+    from psycopg2 import Error as PsycopgError
+except ImportError:
+    PsycopgError = ()
 
 _logger = logging.getLogger(__name__)
+
+
+def _skippable_pairing_exc(exc):
+    """Business rule conflicts and DB concurrency — skip one pair, keep download alive."""
+    if isinstance(exc, ValidationError):
+        return True
+    if PsycopgError and isinstance(exc, PsycopgError):
+        return True
+    return False
 
 
 class ZkMachinePairingSync(models.Model):
@@ -104,21 +119,41 @@ class ZkMachinePairingSync(models.Model):
             if existing:
                 if check_out_str or any(k in pair for k in ('auto_closed', 'expected_hours')):
                     try:
-                        existing.write(vals)
+                        with self.env.cr.savepoint():
+                            existing.with_context(
+                                skip_attendance_classification=True,
+                            ).write(vals)
                         updated_hr += 1
                     except Exception as e:
-                        _logger.error('Error updating attendance %s: %s', existing.id, e)
+                        if _skippable_pairing_exc(e):
+                            _logger.warning(
+                                'Skipping attendance update %s (employee %s): %s',
+                                existing.id, employee_id, e,
+                            )
+                        else:
+                            _logger.error('Error updating attendance %s: %s', existing.id, e)
+                            raise
             else:
                 if check_out_str or not auto_closed:
                     try:
-                        att_obj.create({
-                            'employee_id': employee_id,
-                            'check_in': check_in_str,
-                            **vals,
-                        })
+                        with self.env.cr.savepoint():
+                            att_obj.with_context(
+                                skip_attendance_classification=True,
+                            ).create({
+                                'employee_id': employee_id,
+                                'check_in': check_in_str,
+                                **vals,
+                            })
                         created_hr += 1
                     except Exception as e:
-                        _logger.error('Error creating HR attendance: %s', e)
+                        if _skippable_pairing_exc(e):
+                            _logger.warning(
+                                'Skipping attendance create (employee %s, %s): %s',
+                                employee_id, check_in_str, e,
+                            )
+                        else:
+                            _logger.error('Error creating HR attendance: %s', e)
+                            raise
 
         return {'created': created_hr, 'updated': updated_hr, 'pairs': len(paired_records)}
 

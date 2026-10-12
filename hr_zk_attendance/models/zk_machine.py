@@ -32,14 +32,20 @@ from odoo import api, fields, models
 from odoo import _
 from odoo.exceptions import UserError, ValidationError
 from .attendance_pairing_engine import TimePairingEngine
-
 _logger = logging.getLogger(__name__)
+
 try:
     from zk import ZK, const
+    PYZK_AVAILABLE = True
 except ImportError:
+    ZK = None
+    const = None
+    PYZK_AVAILABLE = False
     _logger.error("Please Install pyzk library.")
 
-_logger = logging.getLogger(__name__)
+_PYZK_INSTALL_MSG = _(
+    "Pyzk not found. Install in the Odoo container: pip3 install pyzk, then restart Odoo."
+)
 
 
 class HrAttendance(models.Model):
@@ -83,6 +89,43 @@ class ZkMachine(models.Model):
     port_no = fields.Integer(string='Port No', required=True)
     address_id = fields.Many2one('res.partner', string='Working Address')
     company_id = fields.Many2one('res.company', string='Company', default=lambda self: self.env.user.company_id.id)
+    last_download_at = fields.Datetime(string='Última descarga', readonly=True)
+    last_download_message = fields.Text(string='Resumen última descarga', readonly=True)
+
+    def _ensure_pyzk(self):
+        if not PYZK_AVAILABLE:
+            raise UserError(_PYZK_INSTALL_MSG)
+
+    def _make_zk_client(self, machine_ip, zk_port, timeout=30):
+        self._ensure_pyzk()
+        return ZK(
+            machine_ip,
+            port=zk_port,
+            timeout=timeout,
+            password=0,
+            force_udp=False,
+            ommit_ping=True,
+        )
+
+    def _client_notification(self, title, message, notify_type='success', sticky=False):
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': title,
+                'message': message,
+                'type': notify_type,
+                'sticky': sticky,
+            },
+        }
+
+    def _pyzk_dependency_notification(self):
+        return self._client_notification(
+            _('Dependencia pyzk'),
+            _PYZK_INSTALL_MSG,
+            notify_type='danger',
+            sticky=True,
+        )
 
     def device_connect(self, zk):
         try:
@@ -98,70 +141,63 @@ class ZkMachine(models.Model):
 
         self.ensure_one()
 
+        if not PYZK_AVAILABLE:
+            return self._pyzk_dependency_notification()
+
         try:
             machine_ip = self.name
             zk_port = self.port_no
             timeout = 30
 
-            zk = ZK(
-                machine_ip,
-                port=zk_port,
-                timeout=timeout,
-                password=0,
-                force_udp=False,
-                ommit_ping=True
-            )
-
+            zk = self._make_zk_client(machine_ip, zk_port, timeout=timeout)
             conn = self.device_connect(zk)
 
             if conn:
                 conn.disconnect()
 
-                return {
-                    'type': 'ir.actions.client',
-                    'tag': 'display_notification',
-                    'params': {
-                        'title': _('Conexión Exitosa'),
-                        'message': _('El dispositivo respondió correctamente.'),
-                        'type': 'success',
-                        'sticky': False,
-                    }
-                }
+                return self._client_notification(
+                    _('Conexión Exitosa'),
+                    _('El dispositivo respondió correctamente.'),
+                    notify_type='success',
+                )
 
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': _('Conexión Fallida'),
-                    'message': _('No fue posible conectarse al dispositivo. Verifique IP, puerto y red.'),
-                    'type': 'danger',
-                    'sticky': True,
-                }
-            }
+            return self._client_notification(
+                _('Conexión Fallida'),
+                _('No fue posible conectarse al dispositivo. Verifique IP, puerto y red.'),
+                notify_type='danger',
+                sticky=True,
+            )
 
-        except Exception as e:
-
+        except UserError:
+            raise
+        except (OSError, TimeoutError, ConnectionError) as e:
             _logger.error("ZK connection error: %s", e)
-
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': _('Error de Conexión'),
-                    'message': _('Connection failed: %s (dep pyzk)') % str(e),
-                    'type': 'danger',
-                    'sticky': True,
-                }
-            }
+            return self._client_notification(
+                _('Error de Conexión'),
+                _('Connection failed: %s') % str(e),
+                notify_type='danger',
+                sticky=True,
+            )
+        except Exception as e:
+            _logger.error("ZK connection error: %s", e)
+            return self._client_notification(
+                _('Error de Conexión'),
+                _('Connection failed: %s') % str(e),
+                notify_type='danger',
+                sticky=True,
+            )
 
     def check_connection(self):
         """Check connection without raising UserError, returns True/False"""
+        if not PYZK_AVAILABLE:
+            _logger.error("Connection check skipped: %s", _PYZK_INSTALL_MSG)
+            return False
         for info in self:
             try:
                 machine_ip = info.name
                 zk_port = info.port_no
                 timeout = 30
-                zk = ZK(machine_ip, port=zk_port, timeout=timeout, password=0, force_udp=False, ommit_ping=True)
+                zk = self._make_zk_client(machine_ip, zk_port, timeout=timeout)
                 conn = self.device_connect(zk)
                 if conn:
                     conn.disconnect()
@@ -204,10 +240,7 @@ class ZkMachine(models.Model):
                 machine_ip = info.name
                 zk_port = info.port_no
                 timeout = 30
-                try:
-                    zk = ZK(machine_ip, port=zk_port, timeout=timeout, password=0, force_udp=False, ommit_ping=True)
-                except NameError:
-                    raise UserError(_("Please install it with 'pip3 install pyzk'."))
+                zk = self._make_zk_client(machine_ip, zk_port, timeout=timeout)
                 conn = self.device_connect(zk)
                 if conn:
                     conn.enable_device()
@@ -254,8 +287,11 @@ class ZkMachine(models.Model):
 
     def _create_zk_connection(self, machine_ip, zk_port, timeout=30):
         """Crear conexión ZK al dispositivo"""
+        if not PYZK_AVAILABLE:
+            _logger.error("Error creating ZK connection: %s", _PYZK_INSTALL_MSG)
+            return False
         try:
-            zk = ZK(machine_ip, port=zk_port, timeout=timeout, password=0, force_udp=False, ommit_ping=True)
+            zk = self._make_zk_client(machine_ip, zk_port, timeout=timeout)
             conn = self.device_connect(zk)
             return conn
         except Exception as e:
@@ -454,7 +490,24 @@ class ZkMachine(models.Model):
     @api.model
     def cron_download(self):
         return super().cron_download()
-    
+
+    def _zk_attendance_post_download(self):
+        """Extension hook (e.g. roster classifier). Runs after commit, before UI feedback."""
+
+    def _download_user_feedback(self, result_msg, silent=False, notify_type='success'):
+        if silent or not result_msg:
+            return True
+        self.write({
+            'last_download_message': result_msg,
+            'last_download_at': fields.Datetime.now(),
+        })
+        title = _('Descarga Completada') if notify_type == 'success' else _('Descarga Fallida')
+        return self._client_notification(
+            title,
+            result_msg,
+            notify_type=notify_type,
+            sticky=notify_type != 'success',
+        )
 
     def download_attendance(self, silent=False):
 
@@ -475,7 +528,7 @@ class ZkMachine(models.Model):
             if not self.check_connection():
                 error_msg = _('Connection check failed. Unable to connect to the device.')
                 if not silent:
-                    raise UserError(error_msg)
+                    return self._download_user_feedback(error_msg, notify_type='danger')
                 _logger.error("Download failed for device %s: %s", info.name, error_msg)
                 continue
 
@@ -486,16 +539,19 @@ class ZkMachine(models.Model):
             _logger.info("Connecting to device %s:%s", machine_ip, zk_port)
 
             try:
-                zk = ZK(machine_ip, port=zk_port, timeout=timeout, password=0, force_udp=False, ommit_ping=True)
-            except NameError:
-                raise UserError(_("Pyzk module not Found. Please install it with 'pip3 install pyzk'."))
+                zk = self._make_zk_client(machine_ip, zk_port, timeout=timeout)
+            except UserError:
+                raise
             except Exception as e:
                 raise UserError(_("Error creating ZK instance: %s") % e)
 
             conn = self.device_connect(zk)
 
             if not conn:
-                raise UserError(_('Unable to connect, please check the parameters and network connections.'))
+                error_msg = _('Unable to connect, please check the parameters and network connections.')
+                if not silent:
+                    return self._download_user_feedback(error_msg, notify_type='danger')
+                raise UserError(error_msg)
 
             try:
                 users = conn.get_users()
@@ -510,7 +566,10 @@ class ZkMachine(models.Model):
                 attendance = []
 
             if not attendance:
-                raise UserError(_('Unable to get the attendance log, please try again later.'))
+                error_msg = _('Unable to get the attendance log, please try again later.')
+                if not silent:
+                    return self._download_user_feedback(error_msg, notify_type='danger')
+                raise UserError(error_msg)
 
             _logger.info("Device returned %s attendance records", len(attendance))
 
@@ -526,10 +585,12 @@ class ZkMachine(models.Model):
             # ============================================================
 
             punches_by_emp_date = {}
+            dirty_emp_dates = set()
             created_zk = 0
             created_hr = 0
             updated_hr = 0
             skipped = 0
+            pairing_skipped_days = 0
 
             # Usar zona horaria del usuario actual o America/Santo_Domingo como fallback
             user_tz = self.env.user.tz or 'America/Santo_Domingo'
@@ -621,13 +682,22 @@ class ZkMachine(models.Model):
 
                         zk_attendance.with_context(tracking_disable=True).create(create_vals)
                         created_zk += 1
+                        dirty_emp_dates.add((emp_id, rec['work_date']))
 
                     except Exception as e:
                         _logger.error("Error creating ZK attendance record: %s", e)
                 else:
                     skipped += 1
 
+            pairing_skipped_days = len(punches_by_emp_date) - len(dirty_emp_dates)
+            if not dirty_emp_dates:
+                _logger.info(
+                    "No new ZK punches; skipping HR pairing for %s employee-days",
+                    pairing_skipped_days,
+                )
             for (emp_id, work_date), punches_list in punches_by_emp_date.items():
+                if (emp_id, work_date) not in dirty_emp_dates:
+                    continue
                 punches_datetimes_raw = [p[0] for p in punches_list]
                 _logger.info(
                     "Processing employee %s work_date %s with punches: %s",
@@ -654,27 +724,21 @@ class ZkMachine(models.Model):
             result_msg = (
                 "Asistencia descargada: "
                 "ZK:%s creados, HR:%s creados, %s actualizados "
-                "(%s cerradas automáticamente)"
+                "(%s cerradas automáticamente). "
+                "Días empleado reprocesados: %s; omitidos (sin marcas nuevas): %s."
             ) % (
                 created_zk,
                 created_hr,
                 updated_hr,
-                closed_pending
+                closed_pending,
+                len(dirty_emp_dates),
+                pairing_skipped_days,
             )
 
             _logger.info(result_msg)
 
         if not silent and result_msg:
-
-            return {
-                "type": "ir.actions.client",
-                "tag": "display_notification",
-                "params": {
-                    "title": "Descarga Completada",
-                    "message": result_msg,
-                    "sticky": True,
-                    "type": "success"
-                }
-            }
+            self._zk_attendance_post_download()
+            return self._download_user_feedback(result_msg, silent=silent)
 
         return True

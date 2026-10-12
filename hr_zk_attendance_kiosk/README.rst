@@ -17,4 +17,4 @@ TEST server (glowicom.intrepidux.com)
 -------------------------------------
 
 Verify ``hr_employee_calendar_history`` is installed (``get_calendar_for_date``).
-Optional: ``hr_zk_attendance_roster`` if ``hr_roster`` is used.
+Optional: ``hr_zk_attendance_roster`` (under ``custom/l10n_dom/``) if ``hr_roster`` is used.
